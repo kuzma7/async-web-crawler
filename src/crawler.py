@@ -34,13 +34,13 @@ class AsyncCrawler:
     async def fetch_url(self, url: str) -> str:
         if self.session is None or self.session.closed:
             await self.start()
-        logger.info("Начинаем загрузку %s", url)
         try:
             async with self.semaphore:
                 logger.info("Начинаем загрузку %s", url)
                 start = time.perf_counter()
 
                 async with self.session.get(url) as response:
+                    response.raise_for_status()
                     html = await response.text()
                     elapsed = time.perf_counter() - start
                     logger.info(

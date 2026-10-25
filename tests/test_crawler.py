@@ -14,7 +14,7 @@ async def local_server():
         path = request.path
 
         if path == "/not-found":
-            return web.Response(status=404)
+            return web.Response(status=404, text="Not found")
 
         if path == "/slow":
             await asyncio.sleep(0.5)
@@ -36,6 +36,32 @@ async def local_server():
         yield f"http://127.0.0.1:{port}"
     finally:
         await runner.cleanup()
+
+
+@pytest.mark.asyncio
+async def test_fetch_urls_without_start():
+    async with local_server() as base_url:
+        crawler = AsyncCrawler(max_concurrent=5)
+        urls = [base_url, f"{base_url}/second"]
+
+        try:
+            results = await crawler.fetch_urls(urls)
+
+            assert results == {
+                url: "<html>Test page</html>" for url in urls
+            }
+            session = crawler.session
+            assert session is not None
+            assert not session.closed
+
+            assert await crawler.fetch_urls(urls) == results
+            assert crawler.session is session
+        finally:
+            await crawler.close()
+
+        assert session.closed
+        assert crawler.session is None
+        await crawler.close()
 
 
 @pytest.mark.asyncio
