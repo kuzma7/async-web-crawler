@@ -10,18 +10,16 @@ logger = logging.getLogger(__name__)
 class AsyncCrawler:
 
     def __init__(self, max_concurrent: int = 10):
-        self.semaphore = asyncio.Semaphore(max_concurrent)
         if max_concurrent < 1:
             raise ValueError("max_concurrent должен быть больше 0")
 
+        self.semaphore = asyncio.Semaphore(max_concurrent)
         self.max_concurrent = max_concurrent
-
         self.timeout = aiohttp.ClientTimeout(
             total=15,
             connect=5,
             sock_read=10
         )
-
         self.session = None
 
     async def start(self):
@@ -35,20 +33,16 @@ class AsyncCrawler:
 
     async def fetch_url(self, url: str) -> str:
         if self.session is None or self.session.closed:
-            raise RuntimeError("Сначала вызови crawler.start()")
-
+            await self.start()
         logger.info("Начинаем загрузку %s", url)
-        start = time.perf_counter()
-
         try:
             async with self.semaphore:
+                logger.info("Начинаем загрузку %s", url)
+                start = time.perf_counter()
+
                 async with self.session.get(url) as response:
-                    response.raise_for_status()
-
                     html = await response.text()
-
                     elapsed = time.perf_counter() - start
-
                     logger.info(
                         "Успешно загружен %s за %.2f сек.",
                         url,
@@ -87,18 +81,21 @@ class AsyncCrawler:
             urls: list[str]
     ) -> dict[str, str]:
 
-        logger.info("Запускаем загрузку %d URL", len(urls))
+        if not urls:
+            return {}
+        await self.start()
 
+        logger.info("Запускаем загрузку %d URL", len(urls))
         responses = await asyncio.gather(
             *(self.fetch_url(url) for url in urls)
         )
-
         results = dict(zip(urls, responses))
-
         logger.info("Загрузка завершена")
-
         return results
 
-    async def close(self):
+    async def close(self) -> None:
         if self.session is not None and not self.session.closed:
             await self.session.close()
+            self.session = None
+
+            logger.info("HTTP-сессия закрыта")
