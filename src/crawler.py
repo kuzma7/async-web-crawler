@@ -4,6 +4,8 @@ import time
 
 import aiohttp
 
+from src.html_parser import HTMLParser
+
 logger = logging.getLogger(__name__)
 
 
@@ -21,6 +23,7 @@ class AsyncCrawler:
             sock_read=10
         )
         self.session = None
+        self.parser = HTMLParser()
 
     async def start(self):
         if self.session is None or self.session.closed:
@@ -92,6 +95,10 @@ class AsyncCrawler:
         results = dict(zip(urls, responses))
         logger.info("Загрузка завершена")
         return results
+
+    async def fetch_and_parse(self, url: str) -> dict:
+        html = await self.fetch_url(url)
+        return await self.parser.parse_html(html, url)
 
     async def close(self) -> None:
         if self.session is not None and not self.session.closed:

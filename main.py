@@ -1,4 +1,5 @@
 import asyncio
+import json
 import logging
 import time
 
@@ -7,44 +8,37 @@ from src.crawler import AsyncCrawler
 URLS = [
     "https://example.com",
     "https://www.python.org",
-    "https://httpbin.org/get",
-    "https://httpbin.org/delay/1",
-    "https://httpbin.org/status/404",
-    "https://httpbin.org/headers",
+    "https://httpbin.org/html",
 ]
 
 
-async def run_crawler(max_concurrent: int) -> float:
-    crawler = AsyncCrawler(max_concurrent=max_concurrent)
+async def main():
+    crawler = AsyncCrawler(max_concurrent=3)
     start = time.perf_counter()
 
     try:
-        results = await crawler.fetch_urls(URLS)
-
-        for url, html in results.items():
-            status = "OK" if html else "ERROR"
-            print(f"{status} | {url}")
-
+        results = await asyncio.gather(
+            *(crawler.fetch_and_parse(url) for url in URLS)
+        )
     finally:
         await crawler.close()
 
     elapsed = time.perf_counter() - start
 
-    print(f"Время выполнения: {elapsed:.2f} сек.")
-    return elapsed
-
-
-async def main():
-    print("=== Последовательная загрузка ===")
-    sequential = await run_crawler(max_concurrent=1)
-
-    print("\n=== Конкурентная загрузка ===")
-    concurrent = await run_crawler(max_concurrent=5)
-
-    if concurrent > 0:
-        print(
-            f"\nУскорение: {sequential / concurrent:.2f}x"
-        )
+    summaries = [
+        {
+            "url": page["url"],
+            "title": page["title"],
+            "text_length": len(page["text"]),
+            "links_count": len(page["links"]),
+            "links": page["links"],
+            "images_count": len(page["images"]),
+            "headings": page["headings"],
+        }
+        for page in results
+    ]
+    print(json.dumps(summaries, ensure_ascii=False, indent=2))
+    print(f"\nВремя выполнения: {elapsed:.2f} сек.")
 
 
 if __name__ == "__main__":
